@@ -1,0 +1,90 @@
+@startuml er_database
+!theme plain
+title POS System - Database ER Diagram
+
+skinparam linetype ortho
+skinparam defaultFontSize 11
+
+entity "roles" as roles {
+  * id : SERIAL (PK)
+  --
+  name : VARCHAR(32) UNIQUE NOT NULL
+}
+
+entity "employees" as employees {
+  * id : SERIAL (PK)
+  --
+  username : VARCHAR(64) UNIQUE NOT NULL
+  password_hash : VARCHAR(256) NOT NULL
+  display_name : VARCHAR(128)
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "employee_roles" as employee_roles {
+  * employee_id : INT (PK, FK -> employees.id)
+  * role_id : INT (PK, FK -> roles.id)
+  --
+}
+
+entity "refresh_tokens" as refresh_tokens {
+  * id : SERIAL (PK)
+  --
+  employee_id : INT NOT NULL (FK -> employees.id)
+  token_hash : VARCHAR(256) NOT NULL
+  expires_at : TIMESTAMPTZ NOT NULL
+  revoked : BOOLEAN DEFAULT false
+  created_at : TIMESTAMPTZ
+}
+
+entity "plugins" as plugins {
+  * id : SERIAL (PK)
+  --
+  name : VARCHAR(128) UNIQUE NOT NULL
+  is_active : BOOLEAN DEFAULT true
+  settings : JSONB DEFAULT '{}'
+  consumer : VARCHAR(32) NOT NULL  ('python' | 'node')
+  description : TEXT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "event_log" as event_log {
+  * id : SERIAL (PK)
+  --
+  event_type : VARCHAR(128) NOT NULL
+  transaction_id : VARCHAR(128)
+  payload : JSONB NOT NULL
+  plugin_name : VARCHAR(128) NOT NULL
+  consumer : VARCHAR(32) NOT NULL
+  processed_at : TIMESTAMPTZ
+}
+
+entity "dead_letter_events" as dead_letter_events {
+  * id : SERIAL (PK)
+  --
+  event_type : VARCHAR(128)
+  payload : JSONB NOT NULL
+  error_message : TEXT
+  plugin_name : VARCHAR(128)
+  failed_at : TIMESTAMPTZ
+}
+
+' Relationships
+employee_roles }o--|| employees : ON DELETE CASCADE
+employee_roles }o--|| roles : ON DELETE CASCADE
+refresh_tokens }o--|| employees : ON DELETE CASCADE
+
+note bottom of event_log
+  Written by consumers after each
+  successful plugin execution.
+  plugin_name is logical reference.
+end note
+
+note bottom of dead_letter_events
+  Schema only; DLQ currently
+  writes to Kafka topic
+  pos-events-dlq.
+end note
+
+@enduml

@@ -1,0 +1,27 @@
+@startuml C4-Level-3-Frontend
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Level 3 - Component Diagram\nWeb Application Container
+
+Container_Boundary(web_app, "Web Application (React, nginx :3000)") {
+    Component(login, "Login", "React page", "Credentials form; calls POST /auth/login; stores tokens")
+    Component(dashboard, "Dashboard", "React layout", "Tabs: Terminal, Plugins, Events")
+    Component(pos_terminal, "POS Terminal", "React component", "Start transaction, customer, items, subtotal, pay; calls /pos/transaction/*")
+    Component(plugin_list, "Plugin List", "React component", "GET /plugins; toggle/edit; PUT /plugins/{id}")
+    Component(event_log_ui, "Event Log", "React component", "GET /events; display recent event_log")
+    Component(auth_context, "Auth Context", "React context", "Holds user and tokens; provides login, logout, refresh")
+    Component(api_client, "API Client", "axios", "Base URL, Authorization header, 401 interceptor -> /auth/refresh")
+}
+
+Container_Ext(api, "API", "FastAPI", "Backend REST API")
+
+Rel(login, auth_context, "On success store user and tokens", "")
+Rel(login, api_client, "POST /auth/login", "JSON")
+Rel(dashboard, auth_context, "Consumes user", "")
+Rel(pos_terminal, api_client, "POST /pos/transaction/*", "JSON, Bearer")
+Rel(plugin_list, api_client, "GET /plugins, PUT /plugins/{id}", "JSON, Bearer")
+Rel(event_log_ui, api_client, "GET /events", "Bearer")
+Rel(api_client, api, "REST", "HTTPS")
+Rel(api_client, auth_context, "On 401 trigger refresh", "")
+
+@enduml

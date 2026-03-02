@@ -1,0 +1,46 @@
+@startuml sequence_plugin_config
+!theme plain
+title Sequence: Plugin Config Flow (Admin -> API -> DB -> Consumers poll)
+
+actor Admin
+participant "React\nPluginList" as FE
+participant "FastAPI\nRoutes" as API
+participant "PostgreSQL\nplugins" as PG
+participant "ConfigStore\n(Python)" as CStorePy
+participant "ConfigStore\n(Node)" as CStoreNode
+participant "Consumer\nPython" as CPY
+participant "Consumer\nNode" as CN
+
+== Load plugins (Admin opens Plugins tab) ==
+Admin -> FE : Open "Plugins" tab
+FE -> API : GET /plugins\nBearer token
+API -> API : get_current_user (JWT)
+API -> PG : SELECT id, name, is_active, settings, consumer, description\nFROM plugins (optional ?consumer=python|node)
+PG --> API : rows
+API --> FE : 200 [ plugins ]
+FE --> Admin : Display plugin cards (toggle, settings)
+
+== Update plugin (Admin toggles or edits) ==
+Admin -> FE : Toggle is_active or edit settings
+FE -> API : PUT /plugins/{plugin_id}\nBearer + ADMIN\n{ is_active, settings }
+API -> API : require_role("ADMIN"), get_current_user
+API -> PG : UPDATE plugins SET is_active = ?, settings = ?\nWHERE id = ?
+PG --> API : OK
+API --> FE : 200 updated plugin
+FE --> Admin : UI updated
+
+== Consumers pick up config (background, no direct call) ==
+loop Every CONFIG_REFRESH_INTERVAL (default 5s)
+  CStorePy -> PG : SELECT id, name, is_active, settings\nFROM plugins WHERE consumer = 'python'
+  PG --> CStorePy : rows
+  CStorePy -> CStorePy : Update in-memory cache by plugin name
+  CStoreNode -> PG : SELECT ... WHERE consumer = 'node'
+  PG --> CStoreNode : rows
+  CStoreNode -> CStoreNode : Update cache
+end
+note right of CStorePy
+  Next event processed by CPY/CN
+  uses new is_active and settings
+end note
+
+@enduml

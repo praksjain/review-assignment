@@ -1,0 +1,26 @@
+@startuml C4-Level-1-Context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Level 1 - System Context Diagram\nPOS System
+
+' Actors: people who use the system
+Person(employee, "Employee", "Store staff who log in and run POS transactions via the web terminal")
+Person(admin, "Administrator", "Manages plugin configuration and event log; requires ADMIN role")
+
+' The system in scope (black box)
+System(pos_system, "POS System", "Event-driven Point of Sale: web terminal, plugin management, event streaming, and consumers that process POS events")
+
+' External systems (out of scope but directly used)
+System_Ext(kafka, "Message Broker", "Apache Kafka: streams pos-events, pos-derived-events, pos-events-dlq")
+SystemDb_Ext(postgres, "Database", "PostgreSQL: auth, plugins, event_log, dead_letter_events")
+
+' Relationships - single direction per flow to avoid overlap
+' User -> System
+Rel(employee, pos_system, "Uses", "HTTPS / JWT")
+Rel(admin, pos_system, "Manages plugins and events", "HTTPS / JWT")
+
+' System -> External (no overlapping arcs: system to each external once)
+Rel(pos_system, kafka, "Publishes and consumes events", "Kafka protocol")
+Rel(pos_system, postgres, "Reads and writes config and logs", "SQL")
+
+@enduml

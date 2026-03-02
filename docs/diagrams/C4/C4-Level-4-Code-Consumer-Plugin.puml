@@ -1,0 +1,101 @@
+@startuml C4-Level-4-Code-Consumer-Plugin
+!theme plain
+title C4 Level 4 - Code (Consumer Plugin Execution)\nClasses and modules for event consumption and plugin dispatch
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "main" {
+  class main {
+    **main**
+    ----
+    - config_store: ConfigStore
+    - plugins: list of BasePlugin
+    - dlq_producer: Producer
+    - consumer: Consumer
+    ----
+    + main()
+    - log_plugin_execution(event, plugin_name)
+    - execute_with_retry(plugin, event, settings, dlq_producer)
+  }
+}
+
+package "config_store" {
+  class ConfigStore {
+    **ConfigStore**
+    ----
+    - _cache: dict
+    - _consumer_name: str
+    - _refresh_interval: int
+    ----
+    + start()
+    + stop()
+    + get_plugin_config(plugin_name): config or None
+    - _fetch_plugins()
+    - _poll_loop()
+  }
+}
+
+package "plugin_loader" {
+  class plugin_loader {
+    **plugin_loader**
+    ----
+    + discover_plugins(): list of BasePlugin
+  }
+}
+
+package "base_plugin" {
+  abstract class BasePlugin {
+    **BasePlugin** <<abstract>>
+    ----
+    + {abstract} name: str
+    + {abstract} handle(event, settings)
+    + matches(event, settings): bool
+  }
+}
+
+package "plugins" {
+  class HttpCallPlugin {
+    **HttpCallPlugin**
+    ----
+    + name: "http_call_plugin"
+    + handle(event, settings)
+    + matches(event, settings)
+  }
+  class DbWriterPlugin {
+    **DbWriterPlugin**
+    ----
+    + name: "db_writer_plugin"
+    + handle(event, settings)
+    + matches(event, settings)
+  }
+  class EventPublisherPlugin {
+    **EventPublisherPlugin**
+    ----
+    + name: "event_publisher_plugin"
+    + handle(event, settings)
+    + matches(event, settings)
+  }
+}
+
+main --> ConfigStore : get_plugin_config(plugin.name)
+main --> plugin_loader : discover_plugins()
+main --> BasePlugin : for each: matches() then handle()
+BasePlugin <|-- HttpCallPlugin
+BasePlugin <|-- DbWriterPlugin
+BasePlugin <|-- EventPublisherPlugin
+
+note right of main
+  Loop: poll() -> event
+  For each plugin: config_store.get
+  -> plugin.matches -> execute_with_retry(handle)
+  On success: log_plugin_execution -> INSERT event_log
+  On failure: send_to_dlq()
+end note
+
+note bottom of BasePlugin
+  matches(): event_type in settings.event_types
+  or event_types empty => True
+end note
+
+@enduml

@@ -1,0 +1,40 @@
+@startuml sequence_login
+!theme plain
+title Sequence: Login Flow (Frontend -> API -> DB + Kafka)
+
+actor User
+participant "React\nFrontend" as FE
+participant "FastAPI\nAuth Routes" as API
+participant "PostgreSQL" as PG
+participant "Kafka\npos-events" as K
+
+User -> FE : Enter username / password
+FE -> API : POST /auth/login\n{ username, password }
+
+API -> PG : SELECT employees WHERE username = ?
+alt User not found
+  PG --> API : no row
+  API --> FE : 401 Invalid credentials
+  FE --> User : Show error
+else User found
+  PG --> API : id, password_hash, display_name
+  API -> API : bcrypt.verify(password, password_hash)
+  alt Password invalid
+    API --> FE : 401 Invalid credentials
+    FE --> User : Show error
+  else Password valid
+    API -> PG : SELECT roles JOIN employee_roles WHERE employee_id = ?
+    PG --> API : roles (e.g. ADMIN, EMPLOYEE)
+    API -> API : create_access_token(), create_refresh_token()\nhash_token(refresh_token)
+    API -> PG : INSERT refresh_tokens\n(employee_id, token_hash, expires_at)
+    PG --> API : OK
+    API -> API : _publish_login_event(emp_id, username, roles)
+    API -> K : produce employee.login\nkey=employee_id, value=JSON event
+    K --> API : ack
+    API --> FE : 200 { access_token, refresh_token,\n  employee_id, username, display_name, roles }
+    FE -> FE : Store tokens, set user in AuthContext
+    FE --> User : Redirect to Dashboard
+  end
+end
+
+@enduml

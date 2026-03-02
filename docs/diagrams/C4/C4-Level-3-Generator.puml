@@ -1,0 +1,19 @@
+@startuml C4-Level-3-Generator
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Level 3 - Component Diagram\nEvent Generator Container
+
+Container_Boundary(generator, "Event Generator (Python)") {
+    Component(main, "Main", "Python", "Create Kafka producer; wait for Kafka; run burst then optional continuous loop")
+    Component(event_builder, "Event Builder", "events.py", "generate_transaction_events(): build ordered list (login, started, customer, items, subtotal, payment, logout)")
+    Component(producer, "Kafka Producer", "confluent-kafka", "Publish each event to pos-events; key=transaction_id or employee_id; flush")
+}
+
+ContainerQueue_Ext(kafka, "Message Broker", "Kafka", "pos-events")
+
+Rel(main, event_builder, "generate_transaction_events()", "")
+Rel(main, producer, "publish_transaction(txn_id, events)", "")
+Rel(event_builder, main, "Returns (txn_id, events[])", "")
+Rel(producer, kafka, "Produce", "Kafka producer")
+
+@enduml

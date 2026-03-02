@@ -1,0 +1,80 @@
+@startuml C4-Level-4-Code-API-Auth
+!theme plain
+title C4 Level 4 - Code (API Auth Flow)\nModules and key functions involved in login and token refresh
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "auth_routes" {
+  class auth_routes {
+    **auth_routes**
+    ----
+    + login(body: LoginRequest)
+    + refresh(body: RefreshRequest)
+    + get_me(user)
+    - _get_kafka_producer()
+    - _publish_login_event(emp_id, username, roles)
+  }
+  class LoginRequest {
+    **LoginRequest**
+    ----
+    + username: str
+    + password: str
+  }
+  class RefreshRequest {
+    **RefreshRequest**
+    ----
+    + refresh_token: str
+  }
+}
+
+package "auth" {
+  class auth {
+    **auth**
+    ----
+    + verify_password(plain, hashed): bool
+    + create_access_token(emp_id, username, roles): str
+    + create_refresh_token(emp_id): (str, str)
+    + decode_refresh_token(token): dict
+    + hash_token(token): str
+    + decode_access_token(token): dict
+  }
+}
+
+package "database" {
+  class database {
+    **database**
+    ----
+    + get_connection(): connection
+  }
+}
+
+package "middleware" {
+  class middleware {
+    **middleware**
+    ----
+    + get_current_user(token): user dict
+    + require_role(role)
+  }
+}
+
+auth_routes --> auth : verify_password, create_access_token, create_refresh_token, decode_refresh_token, hash_token
+auth_routes --> database : get_connection, cursor.execute (employees, employee_roles, refresh_tokens)
+auth_routes --> middleware : get_current_user (for /me)
+auth_routes ..> LoginRequest : uses
+auth_routes ..> RefreshRequest : uses
+
+note right of auth
+  JWT (access + refresh), bcrypt,
+  REFRESH_TOKEN_EXPIRE_DAYS
+end note
+
+note bottom of auth_routes
+  login: SELECT employees -> verify_password
+  -> SELECT roles -> INSERT refresh_tokens
+  -> _publish_login_event -> return tokens
+  refresh: decode_refresh_token -> SELECT
+  refresh_tokens -> revoke old -> INSERT new
+end note
+
+@enduml

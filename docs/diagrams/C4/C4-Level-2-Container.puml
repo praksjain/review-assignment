@@ -1,0 +1,44 @@
+@startuml C4-Level-2-Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Level 2 - Container Diagram\nPOS System
+
+Person(employee, "Employee", "Uses POS terminal and views events")
+Person(admin, "Administrator", "Manages plugins and event log")
+
+System_Boundary(pos_system, "POS System") {
+    Container(web_app, "Web Application", "React, Vite, nginx", "Login, Dashboard, POS Terminal UI, Plugin list, Event log")
+    Container(api, "API", "FastAPI", "Auth, plugin CRUD, event log, POS terminal endpoints, webhook sink")
+    Container(generator, "Event Generator", "Python", "Generates full POS transaction sequences; burst or continuous")
+    Container(consumer_python, "Consumer Python", "Python, confluent-kafka", "Consumes pos-events; runs plugins; writes event_log; DLQ on failure")
+    Container(consumer_node, "Consumer Node", "Node.js, kafkajs", "Same as Python consumer; separate consumer group")
+}
+
+ContainerQueue_Ext(kafka, "Message Broker", "Apache Kafka", "Topics: pos-events, pos-derived-events, pos-events-dlq")
+ContainerDb_Ext(postgres, "Database", "PostgreSQL 16", "roles, employees, plugins, event_log, refresh_tokens")
+
+' User -> containers (no overlap: one path from each person)
+Rel(employee, web_app, "Uses", "HTTPS")
+Rel(admin, web_app, "Manages", "HTTPS")
+
+' Web App -> API only
+Rel(web_app, api, "Calls", "REST, JWT")
+
+' API flows (distinct arcs)
+Rel(api, postgres, "Read/write auth and config", "SQL")
+Rel(api, kafka, "Publish login and POS events", "Kafka producer")
+
+' Generator -> Kafka only
+Rel(generator, kafka, "Publish transaction sequences", "Kafka producer")
+
+' Consumers: Kafka -> consumer, consumer -> postgres, consumer -> API (webhook)
+Rel(kafka, consumer_python, "Consume pos-events", "Kafka consumer")
+Rel(kafka, consumer_node, "Consume pos-events", "Kafka consumer")
+Rel(consumer_python, postgres, "Read plugins config; write event_log", "SQL")
+Rel(consumer_node, postgres, "Read plugins config; write event_log", "SQL")
+Rel(consumer_python, api, "HTTP Call plugin: POST webhook", "HTTP")
+Rel(consumer_node, api, "HTTP Call plugin: POST webhook", "HTTP")
+Rel(consumer_python, kafka, "Publish to DLQ and derived topic", "Kafka producer")
+Rel(consumer_node, kafka, "Publish to DLQ and derived topic", "Kafka producer")
+
+@enduml

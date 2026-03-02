@@ -1,0 +1,107 @@
+@startuml architecture
+!theme plain
+title POS System - Component Architecture
+
+skinparam componentStyle rectangle
+skinparam defaultFontSize 11
+
+' Infrastructure
+package "Infrastructure" as infra {
+  component [Zookeeper\n:2181] as ZK
+  component [Apache Kafka\npos-events\npos-derived-events\npos-events-dlq] as K
+  database "PostgreSQL\nroles, employees\nemployee_roles\nrefresh_tokens\nplugins\nevent_log\ndead_letter_events" as PG
+  component [Redis\n:6379] as RD
+  ZK -[#gray]- K
+}
+
+' Frontend
+package "Frontend" as fe {
+  component [React SPA\n(Vite + nginx :3000)] as FE
+  component [Login] as Login
+  component [Dashboard\nTerminal / Plugins / Events] as Dash
+  FE .. Login
+  FE .. Dash
+}
+
+' API
+package "API (FastAPI :8000)" as api {
+  component [Auth\n/login, /refresh, /me] as Auth
+  component [Plugins CRUD\n/plugins] as PluginsAPI
+  component [Events\n/events GET,DELETE] as EventsAPI
+  component [POS Terminal\n/pos/transaction/*] as POS
+  component [Health\n/webhook/mock] as Health
+  Auth -[#green]- PluginsAPI
+  PluginsAPI -[#green]- EventsAPI
+  EventsAPI -[#green]- POS
+  POS -[#green]- Health
+}
+
+' Generator
+package "Event Generation" as gen {
+  component [Generator\n(Python)\nburst / continuous] as GEN
+}
+
+' Consumers
+package "Consumer Python (:8081)" as conpy {
+  component [ConfigStore\npoll plugins every 5s] as CStorePy
+  component [Kafka Consumer\ngroup: pos-consumer-python] as ConPy
+  component [HTTP Call Plugin] as PHP
+  component [DB Writer Plugin] as PDB
+  component [Event Publisher Plugin] as PEP
+  CStorePy -[#blue]- ConPy
+  ConPy -[#blue]- PHP
+  ConPy -[#blue]- PDB
+  ConPy -[#blue]- PEP
+}
+
+package "Consumer Node (:8082)" as connode {
+  component [ConfigStore\npoll plugins every 5s] as CStoreNode
+  component [Kafka Consumer\ngroup: pos-consumer-node] as ConNode
+  component [HTTP Call Plugin] as NHP
+  component [DB Writer Plugin] as NDB
+  component [Event Publisher Plugin] as NEP
+  CStoreNode -[#blue]- ConNode
+  ConNode -[#blue]- NHP
+  ConNode -[#blue]- NDB
+  ConNode -[#blue]- NEP
+}
+
+' Relations
+FE -[#black]-> Auth : REST + JWT
+FE -[#black]-> PluginsAPI : REST
+FE -[#black]-> EventsAPI : REST
+FE -[#black]-> POS : REST
+
+Auth -[#black]-> PG : read employees\nroles, write refresh_tokens
+PluginsAPI -[#black]-> PG : CRUD plugins
+EventsAPI -[#black]-> PG : read/delete event_log
+POS -[#black]-> K : produce pos-events
+Auth -[#black]-> K : produce employee.login
+
+GEN -[#black]-> K : produce pos-events\n(full transaction sequence)
+
+K -[#black]-> ConPy : consume pos-events
+K -[#black]-> ConNode : consume pos-events
+
+CStorePy -[#black]-> PG : SELECT plugins\nWHERE consumer=python
+CStoreNode -[#black]-> PG : SELECT plugins\nWHERE consumer=node
+
+ConPy -[#black]-> PG : INSERT event_log
+ConNode -[#black]-> PG : INSERT event_log
+ConPy -[#black]-> K : produce pos-events-dlq (on failure)
+ConNode -[#black]-> K : produce pos-events-dlq (on failure)
+
+PHP -[#black]-> Health : POST /webhook/mock
+NHP -[#black]-> Health : POST /webhook/mock
+PEP -[#black]-> K : produce pos-derived-events
+NEP -[#black]-> K : produce pos-derived-events
+
+PDB .. PG : no-op plugin\n(write done by consumer)
+NDB .. PG : no-op plugin\n(write done by consumer)
+
+note right of RD
+  Available for cache/counters
+  (optional use)
+end note
+
+@enduml

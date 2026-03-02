@@ -1,0 +1,63 @@
+@startuml sequence_consumer_event
+!theme plain
+title Sequence: Consumer Event Processing (Kafka -> Plugins -> event_log / DLQ / Webhook / Derived)
+
+participant "Kafka\npos-events" as K
+participant "Consumer\n(Python or Node)" as CON
+participant "ConfigStore" as CStore
+participant "PostgreSQL\nplugins" as PG
+participant "Plugin\nHTTP Call" as HTTP
+participant "Plugin\nDB Writer" as DBW
+participant "Plugin\nEvent Publisher" as EPP
+participant "API\n/webhook/mock" as Webhook
+participant "Kafka\npos-derived-events" as KDerived
+participant "PostgreSQL\nevent_log" as ELog
+participant "Kafka\npos-events-dlq" as DLQ
+
+K -> CON : poll() -> message (key, value=JSON event)
+CON -> CON : json.loads(value)
+CON -> CON : event_type, transaction_id
+
+loop For each loaded plugin
+  CON -> CStore : get_plugin_config(plugin_name)
+  CStore --> CON : { id, is_active, settings } or null
+  alt config is null
+    CON -> CON : skip plugin
+  else config present
+    alt not is_active
+      CON -> CON : skip plugin
+    else
+      CON -> CON : plugin.matches(event, settings)\n(event_type in settings.event_types or event_types empty)
+      alt no match
+        CON -> CON : skip plugin
+      else match
+        CON -> CON : execute_with_retry(plugin.handle(event, settings))\nattempt 1: handle(); on exception sleep 1s\nattempt 2: handle(); on exception sleep 2s\nattempt 3: handle(); on exception sleep 4s
+        alt HTTP Call plugin
+          CON -> HTTP : handle(event, settings)
+          HTTP -> Webhook : POST target_url (e.g. /webhook/mock), body=event
+          Webhook --> HTTP : 200
+          HTTP --> CON : success
+        else DB Writer plugin
+          CON -> DBW : handle(event, settings)
+          DBW -> DBW : no-op (consumer does INSERT after each plugin success)
+          DBW --> CON : success
+        else Event Publisher plugin
+          CON -> EPP : handle(event, settings)
+          EPP -> EPP : Build derived_event (event_type from settings.derived_event_type)
+          EPP -> KDerived : produce( pos-derived-events, key=transaction_id, value=derived_event )
+          KDerived --> EPP : ack
+          EPP --> CON : success
+        end
+        alt handle() succeeded (any attempt)
+          CON -> ELog : INSERT event_log\n(event_type, transaction_id, payload, plugin_name, consumer)
+          ELog --> CON : OK
+        else all 3 attempts failed
+          CON -> DLQ : produce( pos-events-dlq,\noriginal_event, plugin_name, error, consumer )
+          DLQ --> CON : ack
+        end
+      end
+    end
+  end
+end
+
+@enduml

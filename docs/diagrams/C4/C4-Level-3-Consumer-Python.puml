@@ -1,0 +1,35 @@
+@startuml C4-Level-3-Consumer-Python
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C4 Level 3 - Component Diagram\nConsumer Python Container
+
+Container_Boundary(consumer_python, "Consumer Python (:8081)") {
+    Component(config_store, "Config Store", "Python thread", "Polls plugins table every 5s; caches by plugin name (id, is_active, settings)")
+    Component(consumer_loop, "Consumer Loop", "confluent-kafka", "Subscribe pos-events; decode JSON; dispatch to plugins; retry 1s/2s/4s")
+    Component(plugin_runner, "Plugin Runner", "Python", "For each plugin: get config, match event, handle with retry; log to event_log or DLQ")
+    Component(http_call_plugin, "HTTP Call Plugin", "Python", "If event_type in settings: POST event to target_url")
+    Component(db_writer_plugin, "DB Writer Plugin", "Python", "Matches all events; handle is no-op; consumer writes event_log")
+    Component(event_publisher_plugin, "Event Publisher Plugin", "Python", "Build derived event; produce to pos-derived-events")
+    Component(event_log_writer, "Event Log Writer", "Python, psycopg2", "INSERT event_log after each successful plugin run")
+    Component(dlq_producer, "DLQ Producer", "confluent-kafka", "On final failure: produce envelope to pos-events-dlq")
+}
+
+ContainerDb_Ext(postgres, "Database", "PostgreSQL", "plugins, event_log")
+ContainerQueue_Ext(kafka, "Message Broker", "Kafka", "pos-events, pos-events-dlq, pos-derived-events")
+Container_Ext(api, "API", "FastAPI", "Webhook endpoint")
+
+Rel(config_store, postgres, "SELECT plugins WHERE consumer=python", "SQL")
+Rel(kafka, consumer_loop, "Poll messages", "Kafka consumer")
+Rel(consumer_loop, config_store, "get_plugin_config(plugin_name)", "")
+Rel(consumer_loop, plugin_runner, "Dispatch event to plugins", "")
+Rel(plugin_runner, http_call_plugin, "handle(event, settings)", "")
+Rel(plugin_runner, db_writer_plugin, "handle(event, settings)", "")
+Rel(plugin_runner, event_publisher_plugin, "handle(event, settings)", "")
+Rel(plugin_runner, event_log_writer, "After success", "SQL")
+Rel(plugin_runner, dlq_producer, "On final failure", "")
+Rel(http_call_plugin, api, "POST target_url", "HTTP")
+Rel(event_publisher_plugin, kafka, "Produce derived event", "Kafka producer")
+Rel(dlq_producer, kafka, "Produce to DLQ", "Kafka producer")
+Rel(event_log_writer, postgres, "INSERT event_log", "SQL")
+
+@enduml

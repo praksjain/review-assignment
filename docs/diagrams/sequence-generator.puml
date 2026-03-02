@@ -1,0 +1,37 @@
+@startuml sequence_generator
+!theme plain
+title Sequence: Generator Flow (Burst / Continuous -> Kafka)
+
+participant "Generator\nmain.py" as GEN
+participant "events.py\ngenerate_transaction_events" as EV
+participant "Kafka\npos-events" as K
+participant "Consumer\nPython" as CPY
+participant "Consumer\nNode" as CN
+
+== Startup ==
+GEN -> GEN : Create Producer (bootstrap.servers)
+GEN -> K : list_topics() (wait for Kafka ready)
+alt Kafka not ready
+  GEN -> GEN : sleep 2s, retry up to 30
+else Kafka ready
+  K --> GEN : metadata
+end
+
+== Burst mode (default) ==
+loop TXN_COUNT times (default 8)
+  GEN -> EV : generate_transaction_events()
+  EV -> EV : Build list of events in order:\n  1. employee.login\n  2. transaction.started\n  3. customer.identified\n  4. item.added x2-5\n  5. transaction.subtotal\n  6. payment.completed\n  7. employee.logout
+  EV --> GEN : (txn_id, events[])
+  GEN -> K : produce( pos-events, key=txn_id|employee_id, value=event ) for each event
+  K --> GEN : delivery_report (per message)
+  GEN -> GEN : flush()
+end
+GEN -> GEN : If MODE=continuous: loop forever every 5s\nelse: exit
+
+== Consumers process (same as any pos-events flow) ==
+K -> CPY : consume (group pos-consumer-python)
+K -> CN  : consume (group pos-consumer-node)
+CPY -> CPY : For each event: plugins match -> handle -> event_log / DLQ
+CN -> CN  : Same
+
+@enduml

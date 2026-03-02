@@ -1,0 +1,21 @@
+{
+  "name": "pos-consumer-node",
+  "version": "1.0.0",
+  "description": "Node.js Kafka consumer with plugin architecture for POS events",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --verbose --forceExit"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.3",
+    "redis": "^4.6.12",
+    "axios": "^1.6.5",
+    "pino": "^8.17.2",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

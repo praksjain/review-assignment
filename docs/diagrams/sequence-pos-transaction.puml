@@ -1,0 +1,69 @@
+@startuml sequence_pos_transaction
+!theme plain
+title Sequence: POS Transaction Flow (UI -> API -> Kafka -> Consumers)
+
+actor User
+participant "React\nPosTerminal" as FE
+participant "FastAPI\nEvent Routes" as API
+participant "Kafka\npos-events" as K
+participant "Consumer\nPython" as CPY
+participant "Consumer\nNode" as CN
+participant "Plugins" as Plugins
+participant "PostgreSQL\nevent_log" as PG
+participant "API\n/webhook/mock" as Webhook
+
+== Start Transaction ==
+User -> FE : Click "Start Transaction"
+FE -> API : POST /pos/transaction/start\nBearer token\n{ store_id, terminal_id }
+API -> API : get_current_user (JWT)
+API -> API : Build transaction.started event\nuuid transaction_id
+API -> K : produce transaction.started
+K --> API : ack
+API --> FE : 200 { transaction_id, event }
+FE --> User : Show transaction_id, next step
+
+== Customer / Items / Subtotal / Pay ==
+User -> FE : Identify customer
+FE -> API : POST /pos/transaction/customer\n{ transaction_id, customer_id, customer_name }
+API -> K : produce customer.identified
+API --> FE : 200 { event }
+
+User -> FE : Add item(s)
+FE -> API : POST /pos/transaction/item (per item)\n{ transaction_id, item_name, sku, quantity, unit_price, category }
+API -> K : produce item.added
+API --> FE : 200 { line_total, event }
+
+User -> FE : Subtotal
+FE -> API : POST /pos/transaction/subtotal\n{ transaction_id, subtotal, tax_rate }
+API -> K : produce transaction.subtotal
+API --> FE : 200 { total, tax, event }
+
+User -> FE : Pay
+FE -> API : POST /pos/transaction/pay\n{ transaction_id, payment_method, amount_due }
+API -> K : produce payment.completed
+API --> FE : 200 { receipt_number, event }
+FE --> User : Show receipt / done
+
+== Asynchronous Consumer Processing (per event) ==
+K -> CPY : consume message (any event)
+K -> CN  : consume message (same event, different group)
+CPY -> CPY : ConfigStore.get_plugin_config(plugin_name)
+CPY -> CPY : For each plugin: matches(event, settings)?
+CPY -> Plugins : handle(event, settings) with retry 1s,2s,4s
+Plugins -> Webhook : HTTP Call: POST target_url (e.g. /webhook/mock)
+Webhook --> Plugins : 200
+Plugins -> K : Event Publisher: produce pos-derived-events (if payment.completed)
+CPY -> PG : INSERT event_log (event_type, transaction_id, payload, plugin_name, consumer)
+note right: On final plugin failure -> produce to pos-events-dlq
+
+CN -> CN : Same flow: config, match, handle, event_log / DLQ
+
+== Event Log View ==
+User -> FE : Open "Events" tab
+FE -> API : GET /events?limit=50\nBearer
+API -> PG : SELECT * FROM event_log ORDER BY processed_at DESC LIMIT ?
+PG --> API : rows
+API --> FE : 200 [ events ]
+FE --> User : Display event log
+
+@enduml
