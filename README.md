@@ -18,8 +18,6 @@ A Point-of-Sale subsystem that processes POS events through a pluggable architec
   └───────────┘     └──────────┘
 ```
 
-See `docs/architecture.md` and `docs/sequence.md` for detailed Mermaid diagrams.
-
 ## Prerequisites
 
 - **Docker** >= 20.10
