@@ -1,6 +1,6 @@
 # POS Event-Driven Plugin Subsystem
 
-A full-stack, event-driven Point-of-Sale subsystem that processes POS events through a pluggable architecture. Events flow through Apache Kafka and are consumed by parallel Python and Node.js consumers, each equipped with dynamically-loaded plugins that can be toggled and configured in real time via a React dashboard.
+A Point-of-Sale subsystem that processes POS events through a pluggable architecture. Events flow through Apache Kafka and are consumed by parallel Python and Node.js consumers, each equipped with dynamically-loaded plugins that can be toggled and configured in real time via a React dashboard.
 
 ## Architecture
 
@@ -224,7 +224,3 @@ pos-system/
 ├── consumer-node/              # Node.js Kafka consumer + plugins
 └── frontend/                   # React plugin dashboard
 ```
-
-## License
-
-MIT
