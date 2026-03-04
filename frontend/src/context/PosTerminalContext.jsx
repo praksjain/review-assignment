@@ -19,6 +19,13 @@ export function PosTerminalProvider({ children }) {
     purchaseRecommender: {
       enabled: false,
     },
+    customerLookup: {
+      enabled: true,
+    },
+    fraudDetection: {
+      enabled: false,
+      threshold: 15,
+    },
   });
 
   const addEvent = (evt) => {

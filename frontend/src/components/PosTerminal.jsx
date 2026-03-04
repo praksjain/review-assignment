@@ -51,6 +51,7 @@ export default function PosTerminal() {
   } = usePosTerminal();
 
   const [recommendedItems, setRecommendedItems] = useState([]);
+  const [itemCounts, setItemCounts] = useState({});
 
   const findItemsBySku = (skus) => {
     const skuSet = new Set(skus);
@@ -91,6 +92,27 @@ export default function PosTerminal() {
     }
   };
 
+  const handleCustomerLookup = async () => {
+    if (!rules?.customerLookup?.enabled) {
+      return;
+    }
+    const mobile = window.prompt("Enter customer's mobile number:");
+    if (!mobile) return;
+    setLoading(true);
+    try {
+      const { data } = await apiClient.post("/pos/transaction/customer-lookup", {
+        transaction_id: txnId,
+        mobile,
+      });
+      addEvent(data.event);
+      setStep(2);
+    } catch (err) {
+      alert("Failed: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddItem = async (item) => {
     if (rules?.ageVerification?.enabled && item.ageRestricted) {
       const input = window.prompt("Age verification required. Please enter customer's age:");
@@ -119,6 +141,36 @@ export default function PosTerminal() {
       });
       setCart((prev) => [...prev, { ...item, line_total: data.line_total }]);
       addEvent(data.event);
+      if (rules?.fraudDetection?.enabled) {
+        const currentCount = itemCounts[item.sku] ?? 0;
+        const newCount = currentCount + 1;
+        const threshold = rules.fraudDetection.threshold ?? 15;
+        setItemCounts((prev) => ({
+          ...prev,
+          [item.sku]: newCount,
+        }));
+        if (newCount > threshold) {
+          const isFraud = window.confirm(
+            `Item "${item.name}" has been added ${newCount} times in this transaction.\n` +
+            "Does this look like potential fraud? Click OK for 'Fraud', or Cancel for 'Normal'."
+          );
+          const decision = isFraud ? "fraud" : "normal";
+          try {
+            const resp = await apiClient.post("/pos/transaction/fraud-alert", {
+              transaction_id: txnId,
+              sku: item.sku,
+              item_name: item.name,
+              count: newCount,
+              decision,
+            });
+            addEvent(resp.data.event);
+          } catch (err) {
+            // Best-effort; core sale flow should continue
+            // eslint-disable-next-line no-alert
+            alert("Failed to publish fraud alert: " + (err.response?.data?.detail || err.message));
+          }
+        }
+      }
       if (rules?.purchaseRecommender?.enabled) {
         const extraSkus = RECOMMENDATION_RULES[item.sku] || [];
         const extras = findItemsBySku(extraSkus);
@@ -171,6 +223,8 @@ export default function PosTerminal() {
 
   const handleReset = () => {
     resetTransaction();
+    setRecommendedItems([]);
+    setItemCounts({});
   };
 
   const cartSubtotal = cart.reduce((sum, i) => sum + i.line_total, 0);
@@ -203,10 +257,17 @@ export default function PosTerminal() {
           {step === 1 && (
             <div className="pos-card">
               <h3>Identify Customer</h3>
-              <p>Scan loyalty card — publishes <code>customer.identified</code> event.</p>
-              <button className="pos-btn primary" onClick={handleCustomer} disabled={loading}>
-                {loading ? "Scanning..." : "Scan Loyalty Card"}
-              </button>
+              <p>Scan loyalty card or look up by mobile — both publish a <code>customer.identified</code> event.</p>
+              <div className="pos-identify-actions">
+                <button className="pos-btn primary" onClick={handleCustomer} disabled={loading}>
+                  {loading ? "Scanning..." : "Scan Loyalty Card"}
+                </button>
+                {rules?.customerLookup?.enabled && (
+                  <button className="pos-btn" onClick={handleCustomerLookup} disabled={loading}>
+                    Customer Lookup
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

@@ -63,6 +63,7 @@ export default function RulesPanel() {
   };
 
   const minAge = rules?.ageVerification?.minAge ?? 21;
+  const fraudThreshold = rules?.fraudDetection?.threshold ?? 15;
 
   return (
     <div className="rules-panel">
@@ -116,6 +117,73 @@ export default function RulesPanel() {
                 }))
               }
             />
+          </div>
+        </div>
+
+        <div className="rule-row" style={{ marginTop: "1.25rem" }}>
+          <div className="rule-info">
+            <h4>Customer lookup by mobile</h4>
+            <p>
+              When enabled, cashiers can look up a customer by mobile number instead of only using a
+              loyalty card. A customer.identified event is still published to the bus.
+            </p>
+          </div>
+          <div className="rule-controls">
+            <ToggleSwitch
+              checked={!!rules?.customerLookup?.enabled}
+              onChange={() =>
+                setRules((prev) => ({
+                  ...prev,
+                  customerLookup: {
+                    ...prev.customerLookup,
+                    enabled: !prev.customerLookup?.enabled,
+                  },
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="rule-row" style={{ marginTop: "1.25rem" }}>
+          <div className="rule-info">
+            <h4>Fraud detection on quantity spikes</h4>
+            <p>
+              When enabled, the POS tracks how many times a single item is added in a transaction.
+              If the count exceeds the configured threshold, the employee is prompted to confirm
+              whether the behavior is fraudulent or normal and an alert event is published.
+            </p>
+          </div>
+          <div className="rule-controls">
+            <ToggleSwitch
+              checked={!!rules?.fraudDetection?.enabled}
+              onChange={() =>
+                setRules((prev) => ({
+                  ...prev,
+                  fraudDetection: {
+                    ...prev.fraudDetection,
+                    enabled: !prev.fraudDetection?.enabled,
+                  },
+                }))
+              }
+            />
+            <label className="rule-min-age">
+              Threshold
+              <input
+                type="number"
+                min="1"
+                value={fraudThreshold}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  setRules((prev) => ({
+                    ...prev,
+                    fraudDetection: {
+                      ...prev.fraudDetection,
+                      threshold: Number.isNaN(val) ? 1 : val,
+                    },
+                  }));
+                }}
+              />
+            </label>
           </div>
         </div>
       </section>

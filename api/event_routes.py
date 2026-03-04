@@ -81,6 +81,21 @@ class IdentifyCustomerRequest(BaseModel):
     customer_id: str = "LOYALTY-000100"
     customer_name: str = "Arpan Joshi"
 
+
+class CustomerLookupRequest(BaseModel):
+    transaction_id: str
+    mobile: str
+
+
+def _lookup_customer_by_mobile(mobile: str) -> dict:
+    db = {
+        "5551000": {"customer_id": "LOYALTY-000142", "customer_name": "Arpan Joshi"},
+        "5552000": {"customer_id": "LOYALTY-000543", "customer_name": "Riya Patel"},
+        "5553000": {"customer_id": "LOYALTY-000812", "customer_name": "Rohan Kumawat"},
+    }
+    return db.get(mobile, {"customer_id": "LOYALTY-999999", "customer_name": "Walk-up Customer"})
+
+
 @router.post("/transaction/customer")
 def identify_customer(body: IdentifyCustomerRequest, user: dict = Depends(get_current_user)):
     event = _base("customer.identified", user)
@@ -92,6 +107,21 @@ def identify_customer(body: IdentifyCustomerRequest, user: dict = Depends(get_cu
     })
     _publish(event)
     return {"event": event}
+
+
+@router.post("/transaction/customer-lookup")
+def customer_lookup(body: CustomerLookupRequest, user: dict = Depends(get_current_user)):
+    customer = _lookup_customer_by_mobile(body.mobile)
+    event = _base("customer.identified", user)
+    event.update({
+        "transaction_id": body.transaction_id,
+        "customer_id": customer["customer_id"],
+        "customer_name": customer["customer_name"],
+        "identification_method": "customer_lookup",
+        "mobile": body.mobile,
+    })
+    _publish(event)
+    return {"event": event, "customer": customer}
 
 
 # ── Add Item ─────────────────────────────────────────────────────────
@@ -168,3 +198,28 @@ def complete_payment(body: PaymentRequest, user: dict = Depends(get_current_user
     })
     _publish(event)
     return {"receipt_number": event["receipt_number"], "event": event}
+
+
+# ── Fraud Alert ───────────────────────────────────────────────────────
+
+class FraudAlertRequest(BaseModel):
+    transaction_id: str
+    sku: str
+    item_name: str
+    count: int
+    decision: str
+
+
+@router.post("/transaction/fraud-alert")
+def fraud_alert(body: FraudAlertRequest, user: dict = Depends(get_current_user)):
+    event = _base("fraud.alerted", user)
+    event.update({
+        "transaction_id": body.transaction_id,
+        "sku": body.sku,
+        "item_name": body.item_name,
+        "count": body.count,
+        "decision": body.decision,
+        "rule": "single_item_quantity_threshold",
+    })
+    _publish(event)
+    return {"event": event}
