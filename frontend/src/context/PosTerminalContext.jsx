@@ -11,6 +11,15 @@ export function PosTerminalProvider({ children }) {
   const [eventLog, setEventLog] = useState([]);
   const [loading, setLoading] = useState(false);
   const [payMethod, setPayMethod] = useState("card");
+  const [rules, setRules] = useState({
+    ageVerification: {
+      enabled: false,
+      minAge: 21,
+    },
+    purchaseRecommender: {
+      enabled: false,
+    },
+  });
 
   const addEvent = (evt) => {
     setEventLog((prev) => [{ ...evt, _time: new Date().toLocaleTimeString() }, ...prev]);
@@ -43,6 +52,8 @@ export function PosTerminalProvider({ children }) {
     setLoading,
     payMethod,
     setPayMethod,
+    rules,
+    setRules,
     addEvent,
     resetTransaction,
   };

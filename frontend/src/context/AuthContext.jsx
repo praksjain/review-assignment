@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { jwtDecode } from "jwt-decode";
 import { setAuthTokens, clearAuthTokens, apiClient } from "../api";
+import { startSession, endSession } from "../timeTracker";
 
 const AuthContext = createContext(null);
 
@@ -15,6 +16,9 @@ export function AuthProvider({ children }) {
     } catch {
       // Ignore errors
     } finally {
+      if (user?.employeeId) {
+        endSession(user.employeeId);
+      }
       clearAuthTokens();
       setUser(null);
       if (logoutTimerRef.current) {
@@ -43,6 +47,7 @@ export function AuthProvider({ children }) {
       roles: data.roles,
     };
     setUser(userData);
+    startSession(userData.employeeId);
     scheduleAutoLogout(decoded.exp);
     return userData;
   }, [scheduleAutoLogout]);

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { apiClient } from "../api";
 import { usePosTerminal } from "../context/PosTerminalContext";
 
@@ -19,7 +19,14 @@ const CATALOG = [
   { name: "Ground Coffee 250g",  sku: "SKU-COFE-250",  price: 5.99, category: "beverages" },
   { name: "Canned Tomatoes 400g", sku: "SKU-TMAT-CAN",  price: 0.99, category: "canned" },
   { name: "Sparkling Water 1L",  sku: "SKU-WATR-1L",   price: 1.19, category: "beverages" },
+  { name: "Local Beer 6-pack",  sku: "SKU-BEER-6PK",  price: 9.99, category: "alcohol", ageRestricted: true },
 ];
+
+const RECOMMENDATION_RULES = {
+  "SKU-SOYM-1L": ["SKU-BNNA-1KG"],
+  "SKU-SOYM-FR": ["SKU-BNNA-1KG"],
+  "SKU-COFE-250": ["SKU-WATR-1L"],
+};
 
 export default function PosTerminal() {
   const {
@@ -38,9 +45,17 @@ export default function PosTerminal() {
     setLoading,
     payMethod,
     setPayMethod,
+    rules,
     addEvent,
     resetTransaction,
   } = usePosTerminal();
+
+  const [recommendedItems, setRecommendedItems] = useState([]);
+
+  const findItemsBySku = (skus) => {
+    const skuSet = new Set(skus);
+    return CATALOG.filter((item) => skuSet.has(item.sku));
+  };
 
   const handleStart = async () => {
     setLoading(true);
@@ -77,6 +92,21 @@ export default function PosTerminal() {
   };
 
   const handleAddItem = async (item) => {
+    if (rules?.ageVerification?.enabled && item.ageRestricted) {
+      const input = window.prompt("Age verification required. Please enter customer's age:");
+      if (input == null) {
+        return;
+      }
+      const age = parseInt(input, 10);
+      if (Number.isNaN(age)) {
+        alert("Invalid age entered. Please try again.");
+        return;
+      }
+      if (age < (rules.ageVerification.minAge ?? 21)) {
+        alert(`Customer must be at least ${rules.ageVerification.minAge ?? 21} years old to purchase this item.`);
+        return;
+      }
+    }
     setLoading(true);
     try {
       const { data } = await apiClient.post("/pos/transaction/item", {
@@ -89,6 +119,13 @@ export default function PosTerminal() {
       });
       setCart((prev) => [...prev, { ...item, line_total: data.line_total }]);
       addEvent(data.event);
+      if (rules?.purchaseRecommender?.enabled) {
+        const extraSkus = RECOMMENDATION_RULES[item.sku] || [];
+        const extras = findItemsBySku(extraSkus);
+        setRecommendedItems(extras);
+      } else {
+        setRecommendedItems([]);
+      }
     } catch (err) {
       alert("Failed: " + (err.response?.data?.detail || err.message));
     } finally {
@@ -190,6 +227,27 @@ export default function PosTerminal() {
                   </button>
                 ))}
               </div>
+              {rules?.purchaseRecommender?.enabled && recommendedItems.length > 0 && (
+                <div className="pos-recommendations">
+                  <h4>Recommended add-ons</h4>
+                  <p className="pos-recommendations-subtitle">
+                    Based on the last item added, you might also suggest:
+                  </p>
+                  <div className="pos-catalog">
+                    {recommendedItems.map((item) => (
+                      <button
+                        key={item.sku}
+                        className="pos-item-btn pos-item-btn-recommendation"
+                        onClick={() => handleAddItem(item)}
+                        disabled={loading}
+                      >
+                        <span className="item-name">{item.name}</span>
+                        <span className="item-price">${item.price.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {cart.length > 0 && (
                 <div className="pos-cart-summary">
                   <p>{cart.length} item(s) — Subtotal: <strong>${cartSubtotal.toFixed(2)}</strong></p>

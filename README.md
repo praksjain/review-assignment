@@ -222,3 +222,7 @@ pos-system/
 ├── consumer-node/              # Node.js Kafka consumer + plugins
 └── frontend/                   # React plugin dashboard
 ```
+<<<<<<< HEAD
+=======
+
+>>>>>>> 1ce8990 (Added new plugins)

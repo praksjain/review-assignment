@@ -1,6 +1,8 @@
 @startuml C4-Level-2-Container
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
+
+' skinparam linetype ortho
 title C4 Level 2 - Container Diagram\nPOS System
 
 Person(employee, "Employee", "Uses POS terminal and views events")
@@ -17,21 +19,16 @@ System_Boundary(pos_system, "POS System") {
 ContainerQueue_Ext(kafka, "Message Broker", "Apache Kafka", "Topics: pos-events, pos-derived-events, pos-events-dlq")
 ContainerDb_Ext(postgres, "Database", "PostgreSQL 16", "roles, employees, plugins, event_log, refresh_tokens")
 
-' User -> containers (no overlap: one path from each person)
 Rel(employee, web_app, "Uses", "HTTPS")
 Rel(admin, web_app, "Manages", "HTTPS")
 
-' Web App -> API only
 Rel(web_app, api, "Calls", "REST, JWT")
 
-' API flows (distinct arcs)
 Rel(api, postgres, "Read/write auth and config", "SQL")
 Rel(api, kafka, "Publish login and POS events", "Kafka producer")
 
-' Generator -> Kafka only
 Rel(generator, kafka, "Publish transaction sequences", "Kafka producer")
 
-' Consumers: Kafka -> consumer, consumer -> postgres, consumer -> API (webhook)
 Rel(kafka, consumer_python, "Consume pos-events", "Kafka consumer")
 Rel(kafka, consumer_node, "Consume pos-events", "Kafka consumer")
 Rel(consumer_python, postgres, "Read plugins config; write event_log", "SQL")

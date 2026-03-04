@@ -1,7 +1,3 @@
--- ============================================================
--- Authentication & Authorization tables
--- ============================================================
-
 CREATE TABLE IF NOT EXISTS roles (
     id   SERIAL PRIMARY KEY,
     name VARCHAR(32) UNIQUE NOT NULL
@@ -35,9 +31,6 @@ CREATE INDEX idx_refresh_tokens_employee ON refresh_tokens(employee_id);
 CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_employees_username ON employees(username);
 
--- ============================================================
--- Plugin & event tables
--- ============================================================
 
 CREATE TABLE IF NOT EXISTS plugins (
     id          SERIAL PRIMARY KEY,
@@ -69,7 +62,7 @@ CREATE TABLE IF NOT EXISTS dead_letter_events (
     failed_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed: Python consumer plugins
+
 INSERT INTO plugins (name, is_active, settings, consumer, description) VALUES
 (
     'http_call_plugin',
@@ -93,7 +86,7 @@ INSERT INTO plugins (name, is_active, settings, consumer, description) VALUES
     'Publishes a derived event back to Kafka when a qualifying event is received'
 );
 
--- Seed: Node.js consumer plugins
+
 INSERT INTO plugins (name, is_active, settings, consumer, description) VALUES
 (
     'http_call_plugin_node',
@@ -117,11 +110,6 @@ INSERT INTO plugins (name, is_active, settings, consumer, description) VALUES
     'Publishes a derived event back to Kafka when a qualifying event is received (Node.js)'
 );
 
--- ============================================================
--- Seed: Roles & demo employees
--- ============================================================
--- Password for admin: admin123  |  Password for employee1: password123
--- Hashes generated with bcrypt (cost 12)
 
 INSERT INTO roles (name) VALUES ('ADMIN'), ('EMPLOYEE');
 

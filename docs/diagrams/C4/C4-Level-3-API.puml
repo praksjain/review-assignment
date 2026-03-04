@@ -10,13 +10,12 @@ Container_Boundary(api, "API (FastAPI :8000)") {
     Component(pos_routes, "POS Terminal Routes", "FastAPI router", "POST /pos/transaction/*; build and publish POS events")
     Component(webhook, "Webhook Sink", "FastAPI endpoint", "POST /webhook/mock; receives HTTP Call plugin payloads")
     Component(database, "Database Adapter", "psycopg2", "get_connection; fetch_all_plugins; update_plugin; fetch_event_log; delete_all_events")
-    Component(middleware, "Auth Middleware", "FastAPI Depends", "get_current_user (JWT); require_role(ADMIN)")
+    Component(middleware, "Auth Middlew are", "FastAPI Depends", "get_current_user (JWT); require_role(ADMIN)")
 }
 
 ContainerDb_Ext(postgres, "Database", "PostgreSQL", "plugins, event_log, employees, refresh_tokens")
 ContainerQueue_Ext(kafka, "Message Broker", "Kafka", "pos-events")
 
-' Internal: routers use middleware and database
 Rel(auth, database, "Query employees, roles; insert refresh_tokens", "")
 Rel(auth, kafka, "Publish employee.login", "Kafka producer")
 Rel(auth, middleware, "Uses for /me", "")

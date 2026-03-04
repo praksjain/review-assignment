@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import PluginList from "./components/PluginList";
 import EventLog from "./components/EventLog";
 import PosTerminal from "./components/PosTerminal";
+import RulesPanel from "./components/RulesPanel";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
@@ -34,7 +35,7 @@ function Dashboard() {
     try {
       const data = await fetchEvents(50);
       setEvents(data);
-    } catch (_) { /* non-critical */ }
+    } catch (_) {  }
   }, []);
 
   useEffect(() => {
@@ -81,6 +82,9 @@ function Dashboard() {
         <button className={tab === "plugins" ? "active" : ""} onClick={() => setTab("plugins")}>
           Plugins
         </button>
+        <button className={tab === "rules" ? "active" : ""} onClick={() => setTab("rules")}>
+          Rules
+        </button>
         <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>
           Event Log
         </button>
@@ -100,6 +104,9 @@ function Dashboard() {
         </div>
         <div className={`tab-panel ${tab === "plugins" ? "tab-panel-active" : ""}`} aria-hidden={tab !== "plugins"}>
           <PluginList plugins={plugins} onRefresh={loadPlugins} readOnly={!isAdmin} />
+        </div>
+        <div className={`tab-panel ${tab === "rules" ? "tab-panel-active" : ""}`} aria-hidden={tab !== "rules"}>
+          <RulesPanel />
         </div>
         <div className={`tab-panel ${tab === "events" ? "tab-panel-active" : ""}`} aria-hidden={tab !== "events"}>
           <EventLog events={events} onRefresh={loadEvents} isAdmin={isAdmin} />
